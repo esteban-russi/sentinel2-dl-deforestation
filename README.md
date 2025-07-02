@@ -99,16 +99,11 @@ This section will showcase the final results of the project, including:
 - Visual comparisons of model predictions vs. ground truth.
 - The final forest change map highlighting areas of deforestation.
 
-*(Add your final plots and findings here)*
-
 ## Future Work
 
 - Experiment with different model backbones (e.g., ResNet, EfficientNet) for the U-Net encoder.
 - Incorporate additional data sources, such as elevation models (DEM) or SAR data, as input features.
 - Deploy the trained model as an inference service on Vertex AI for on-demand analysis of new areas.
-
-## License
-This project is licensed under the MIT License - see the `LICENSE` file for details.
 
 ## Acknowledgements
 - The Copernicus Sentinel-2 program for providing open-access satellite imagery.
