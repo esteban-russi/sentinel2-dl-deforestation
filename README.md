@@ -43,8 +43,6 @@ The project is divided into two main phases:
     - The trained model is evaluated, and its predictions are visualized against the ground truth labels.
     - The final model is used to perform forest change analysis.
 
-![Architecture Diagram](reports/figures/architecture_diagram.png)
-
 ## Repository Structure
 ```
 ├── README.md
