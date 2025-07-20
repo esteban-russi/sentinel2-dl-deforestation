@@ -1,4 +1,4 @@
-# Semantic Segmentation for Deforestation Analysis using Sentinel-2 and U-Net (WIP)
+# Semantic Segmentation for Deforestation Analysis using Sentinel-2 and CNNSs (U-Net) (WIP)
 
 This repository contains the complete code and documentation for an end-to-end deep learning project for forest change analysis in Colombia. The project leverages Sentinel-2 satellite imagery and a U-Net architecture to perform semantic segmentation for land cover classification, with training data sourced from Google's Dynamic World dataset.
 
