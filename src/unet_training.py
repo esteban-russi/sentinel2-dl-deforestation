@@ -1,18 +1,18 @@
 """
-train_models.py
+train_models_4class.py
 
-This script performs an end-to-end training and evaluation workflow for
-semantic segmentation models on satellite imagery. It is designed to be
-run in a non-interactive environment like an HPC cluster (e.g., CSF3).
+This script performs an end-to-end training and evaluation workflow for a
+4-class land cover segmentation task, with a final evaluation on a binary
+Forest vs. Non-Forest task.
 
 Workflow:
-1.  Configures constants and hyperparameters.
-2.  Builds a high-performance tf.data pipeline from TFRecord files.
-3.  Defines, compiles, and trains one or more segmentation models (e.g., U-Net).
-4.  Evaluates the best performing models on the full validation set.
-5.  Saves results: model weights, training history plots, evaluation reports,
-    and prediction visualizations.
-6.  Logs a summary of the experiment run to a CSV file for tracking.
+1. Configures constants for the 4-class problem.
+2. Implements a tf.data pipeline to remap 9 classes to 4.
+3. Calculates class weights to handle imbalance in the training set.
+4. Defines, compiles, and trains a U-Net model on the 4-class task.
+5. Evaluates the model, performing post-processing to get binary metrics.
+6. Saves all results (models, plots, reports) to a timestamped folder.
+7. Logs a summary, including hardware info, to a CSV file.
 """
 
 # =============================================================================
@@ -21,6 +21,7 @@ Workflow:
 import os
 import time
 import glob
+import subprocess
 from datetime import datetime
 import pandas as pd
 import numpy as np
@@ -29,15 +30,16 @@ from tensorflow.keras import layers, Model
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
+import psutil
 
-# Configure Matplotlib for non-GUI backend (crucial for HPC)
+# Configure Matplotlib for non-GUI backend
 plt.switch_backend('Agg')
 
 # =============================================================================
-# --- 1. Configuration & Constants ---
+# --- 1. Configuration & Constants (Refactored for 4-Class Task) ---
 # =============================================================================
 # --- Run-specific Notes ---
-RUN_NOTES = "U-Net baseline training on full Colombian dataset on CSF3."
+RUN_NOTES = "U-Net 4-class training (Trees, Grass, Shrub, Other) with class weights. Binary Forest/Non-Forest final eval."
 
 # --- File & Path Configuration ---
 DATA_FOLDER = 'tfrecords/'
@@ -53,24 +55,42 @@ TCI_BANDS = ['B4', 'B3', 'B2']
 NUM_BANDS = len(BANDS)
 TCI_INDICES = [BANDS.index(b) for b in TCI_BANDS]
 
-# --- Label & Visualization Constants ---
-NUM_CLASSES = 9
-CLASS_NAMES = [
-    'Water', 'Trees', 'Grass', 'Flooded Veg', 'Crops',
-    'Shrub/Scrub', 'Built Area', 'Bare Ground', 'Snow/Ice'
-]
+# --- NEW: 4-Class Label & Visualization Constants ---
+# Original Dynamic World classes: 0:water, 1:trees, 2:grass, 3:flooded_veg, 4:crops, 5:shrub, 6:built, 7:bare, 8:snow
+# Our new mapping:
+# 0: Other (0, 3, 4, 6, 7, 8)
+# 1: Trees (1)
+# 2: Grass (2)
+# 3: Shrub/Scrub (5)
+NUM_CLASSES = 4
+CLASS_NAMES_4 = ['Other', 'Trees', 'Grass', 'Shrub/Scrub']
+# Binary mapping for final evaluation
+BINARY_CLASS_NAMES = ['Non-Forest', 'Forest']
 
 # --- Training Hyperparameters ---
-BATCH_SIZE = 1  # Adjusted for CSF3 GPU memory
+BATCH_SIZE = 32
 BUFFER_SIZE = 1000
-EPOCHS = 1      # Increased for a full production run
+EPOCHS = 50
 VALIDATION_SPLIT = 0.1
 
 # =============================================================================
-# --- 2. Data Pipeline ---
+# --- 2. Data Pipeline (Refactored for 4-Class Task) ---
 # =============================================================================
-def parse_tfrecord(example_proto):
-    """Parses a single TFRecord example into image and one-hot label tensors."""
+def get_gpu_info():
+    """Retrieves GPU information using nvidia-smi."""
+    try:
+        result = subprocess.run(['nvidia-smi', '--query-gpu=name,memory.total,driver_version', '--format=csv,noheader,nounits'],
+                                stdout=subprocess.PIPE, text=True)
+        gpu_name, memory, driver = result.stdout.strip().split(',')
+        return f"{gpu_name.strip()} ({memory.strip()}MiB, Driver: {driver.strip()})"
+    except (FileNotFoundError, IndexError):
+        return "N/A (nvidia-smi not found or failed)"
+
+def parse_tfrecord_4_class(example_proto):
+    """
+    Parses a TFRecord, remaps 9 DW classes to our 4 target classes,
+    and returns the image and one-hot label.
+    """
     feature_description = {band: tf.io.FixedLenFeature([PATCH_SIZE * PATCH_SIZE], tf.float32) for band in BANDS}
     feature_description[LABEL_BAND] = tf.io.FixedLenFeature([], tf.string)
     
@@ -80,50 +100,87 @@ def parse_tfrecord(example_proto):
     image = tf.stack(features_list, axis=-1)
     
     label_decoded = tf.io.decode_raw(example[LABEL_BAND], tf.uint8)
-    label = tf.reshape(label_decoded, [PATCH_SIZE, PATCH_SIZE])
-    label_one_hot = tf.one_hot(tf.cast(label, tf.int32), depth=NUM_CLASSES)
+    label_9_class = tf.reshape(label_decoded, [PATCH_SIZE, PATCH_SIZE])
+    label_9_class = tf.cast(label_9_class, tf.int32)
+    
+    # --- Remapping Logic ---
+    # Create a mapping tensor. Index corresponds to old class, value to new class.
+    # Old: 0,1,2,3,4,5,6,7,8 -> New: 0,1,2,0,0,3,0,0,0
+    remapping = tf.constant([0, 1, 2, 0, 0, 3, 0, 0, 0], dtype=tf.int32)
+    label_4_class = tf.gather(remapping, label_9_class)
+    
+    label_one_hot = tf.one_hot(label_4_class, depth=NUM_CLASSES)
     
     return image, label_one_hot
 
+def calculate_class_weights(dataset):
+    """Calculates class weights based on inverse frequency from a dataset."""
+    print("Calculating class weights from training data...")
+    class_counts = np.zeros(NUM_CLASSES)
+    # Iterate through the dataset to count pixels for each class
+    for _, label_batch in dataset:
+        # labels are one-hot encoded, so argmax gives the class index
+        labels_indices = tf.argmax(label_batch, axis=-1)
+        unique, _, counts = tf.unique_with_counts(tf.reshape(labels_indices, [-1]))
+        for idx, count in zip(unique.numpy(), counts.numpy()):
+            class_counts[idx] += count
+
+    total_pixels = np.sum(class_counts)
+    class_frequencies = class_counts / total_pixels
+    
+    # Inverse frequency weighting
+    class_weights = 1 / (class_frequencies + 1e-6) # Add epsilon to avoid division by zero
+    # Normalize weights
+    class_weights = class_weights / np.sum(class_weights) * NUM_CLASSES
+
+    # Convert to a dictionary for model.fit()
+    class_weight_dict = {i: weight for i, weight in enumerate(class_weights)}
+    
+    print("Class Distribution and Weights:")
+    for i in range(NUM_CLASSES):
+        print(f"  - {CLASS_NAMES_4[i]:<12}: Freq={class_frequencies[i]:.4f}, Weight={class_weight_dict[i]:.4f}")
+        
+    return class_weight_dict
+
 def build_dataset(file_pattern, batch_size, buffer_size, val_split):
-    """Builds, splits, and batches the full dataset for training and validation."""
+    """Builds, splits, and batches the dataset for the 4-class task."""
     tfrecord_files = glob.glob(file_pattern)
     if not tfrecord_files:
         raise FileNotFoundError(f"No TFRecord files found matching pattern: {file_pattern}")
     print(f"Found {len(tfrecord_files)} TFRecord files.")
 
     raw_dataset = tf.data.TFRecordDataset(tfrecord_files, compression_type='GZIP')
-    
-    print("Counting total records...")
     dataset_size = raw_dataset.reduce(np.int64(0), lambda x, _: x + 1).numpy()
-
-    # Create the full data pipeline
-    dataset = raw_dataset.map(parse_tfrecord, num_parallel_calls=tf.data.AUTOTUNE)
+    
+    # Map with the new 4-class parsing function
+    dataset = raw_dataset.map(parse_tfrecord_4_class, num_parallel_calls=tf.data.AUTOTUNE)
     dataset = dataset.shuffle(buffer_size)
     
-    # Split into training and validation sets
     train_size = int((1 - val_split) * dataset_size)
-    train_size = 10
+    #train_size = 10
     
     train_dataset = dataset.take(train_size)
     validation_dataset = dataset.skip(train_size)
     
     print(f"Splitting into {train_size} training samples and {dataset_size - train_size} validation samples.")
     
-    # Apply batching and prefetching
+    # Calculate class weights ONLY on the training split
+    class_weights = calculate_class_weights(train_dataset)
+    
     train_dataset = train_dataset.batch(batch_size).prefetch(buffer_size=tf.data.AUTOTUNE)
     validation_dataset = validation_dataset.batch(batch_size).prefetch(buffer_size=tf.data.AUTOTUNE)
     
     print("Data pipeline built and split successfully.")
     
-    return train_dataset, validation_dataset, train_size, dataset_size - train_size
+    return train_dataset, validation_dataset, train_size, dataset_size - train_size, class_weights
 
 # =============================================================================
-# --- 3. Model Definitions ---
+# --- 3. Model Definition ---
 # =============================================================================
 def build_unet_model(input_shape=(PATCH_SIZE, PATCH_SIZE, NUM_BANDS), num_classes=NUM_CLASSES):
-    """Builds a U-Net model with dropout for regularization."""
+    """Builds a U-Net model, now outputting num_classes=4."""
     inputs = layers.Input(shape=input_shape)
+    # ... [U-Net architecture is identical, only the final layer changes] ...
     c1 = layers.Conv2D(32, (3, 3), activation='relu', kernel_initializer='he_normal', padding='same')(inputs)
     c1 = layers.Dropout(0.1)(c1)
     c1 = layers.Conv2D(32, (3, 3), activation='relu', kernel_initializer='he_normal', padding='same')(c1)
@@ -154,31 +211,34 @@ def build_unet_model(input_shape=(PATCH_SIZE, PATCH_SIZE, NUM_BANDS), num_classe
     c8 = layers.Conv2D(32, (3, 3), activation='relu', kernel_initializer='he_normal', padding='same')(u8)
     c8 = layers.Dropout(0.1)(c8)
     c8 = layers.Conv2D(32, (3, 3), activation='relu', kernel_initializer='he_normal', padding='same')(c8)
+    # The final layer now outputs 4 channels for our 4 classes
     outputs = layers.Conv2D(num_classes, (1, 1), activation='softmax')(c8)
     model = Model(inputs=[inputs], outputs=[outputs], name="U-Net")
     return model
 
-# Add other model definitions (e.g., ResU-Net) here if you want to compare them.
-
 # =============================================================================
-# --- 4. Training and Evaluation Functions ---
+# --- 4. Training and Evaluation Functions (Refactored for 4-Class & Binary) ---
 # =============================================================================
-
-def compile_and_train(model, train_data, val_data, epochs, output_folder):
-    """Compiles, trains, and returns a model and its history."""
+def compile_and_train(model, train_data, val_data, epochs, output_folder, class_weights):
+    """Compiles and trains the model, using class weights and monitoring val_IoU."""
     model_name = model.name
     print(f"\n--- Starting Workflow for Model: {model_name} ---")
     
+    # Find the name of the IoU metric for monitoring
+    iou_metric = tf.keras.metrics.OneHotIoU(num_classes=NUM_CLASSES, target_class_ids=list(range(NUM_CLASSES)))
+    
     model.compile(optimizer='adam',
                   loss=tf.keras.losses.CategoricalCrossentropy(),
-                  metrics=['accuracy', tf.keras.metrics.OneHotIoU(num_classes=NUM_CLASSES, target_class_ids=list(range(NUM_CLASSES)))])
+                  metrics=['accuracy', iou_metric])
     
     print(f"Model '{model_name}' compiled successfully.")
     
+    # Monitor validation IoU for saving the best model and for early stopping
+    monitor_metric = f'val_{iou_metric.name}'
     callbacks = [
         tf.keras.callbacks.ModelCheckpoint(os.path.join(output_folder, f'best_model_{model_name}.keras'),
-                                           save_best_only=True, monitor='val_loss', verbose=1),
-        tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=7, verbose=1, restore_best_weights=True)
+                                           save_best_only=True, monitor=monitor_metric, mode='max', verbose=1),
+        tf.keras.callbacks.EarlyStopping(monitor=monitor_metric, mode='max', patience=10, verbose=1, restore_best_weights=True)
     ]
     
     history = model.fit(
@@ -186,45 +246,58 @@ def compile_and_train(model, train_data, val_data, epochs, output_folder):
         epochs=epochs,
         validation_data=val_data,
         callbacks=callbacks,
-        verbose=2 # Use verbose=2 for cleaner logs in a batch job
+        class_weight=class_weights, # Pass the calculated class weights
+        verbose=2
     )
     print(f"--- Finished Training: {model_name} ---")
     return history
 
 def evaluate_and_report_metrics(models_dict, validation_dataset, output_folder):
-    """Evaluates models, prints reports, saves plots, and returns accuracies."""
+    """
+    Evaluates on the 4-class task and then post-processes for a final
+    binary (Forest vs. Non-Forest) evaluation.
+    """
     print("\n" + "="*50 + "\n--- GENERATING FINAL EVALUATION METRICS ---\n" + "="*50)
     
-    all_true_labels, all_pred_labels_dict = [], {name: [] for name in models_dict.keys()}
+    all_true_labels_4_class, all_pred_labels_dict = [], {name: [] for name in models_dict.keys()}
     
     for image_batch, label_batch in validation_dataset:
         true_labels = np.argmax(label_batch.numpy(), axis=-1).flatten()
-        all_true_labels.extend(true_labels)
+        all_true_labels_4_class.extend(true_labels)
         for name, model in models_dict.items():
             pred_batch = model.predict(image_batch, verbose=0)
             pred_labels = np.argmax(pred_batch, axis=-1).flatten()
             all_pred_labels_dict[name].extend(pred_labels)
             
-    model_accuracies = {}
-    for name, pred_labels in all_pred_labels_dict.items():
+    # --- Post-processing for Binary Classification ---
+    # Remap both true and predicted labels to Forest (1) vs. Non-Forest (0)
+    # In our 4-class setup: 'Trees' is class 1, all others are non-forest.
+    all_true_labels_binary = [1 if label == 1 else 0 for label in all_true_labels_4_class]
+    
+    binary_accuracies = {}
+    for name, pred_labels_4_class in all_pred_labels_dict.items():
         print("\n" + "-"*20 + f" REPORT FOR MODEL: {name} " + "-"*20)
-        report = classification_report(all_true_labels, pred_labels, target_names=CLASS_NAMES, zero_division=0)
-        print("\nClassification Report:\n", report)
         
-        accuracy = accuracy_score(all_true_labels, pred_labels)
-        print(f"Overall Pixel Accuracy: {accuracy:.4f}")
-        model_accuracies[name] = accuracy
+        pred_labels_binary = [1 if label == 1 else 0 for label in pred_labels_4_class]
         
-        cm = confusion_matrix(all_true_labels, pred_labels, labels=np.arange(NUM_CLASSES))
-        plt.figure(figsize=(12, 10))
-        sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=CLASS_NAMES, yticklabels=CLASS_NAMES)
+        report = classification_report(all_true_labels_binary, pred_labels_binary, target_names=BINARY_CLASS_NAMES)
+        print("\nBinary Classification Report (Forest vs. Non-Forest):")
+        print(report)
+        
+        accuracy = accuracy_score(all_true_labels_binary, pred_labels_binary)
+        print(f"Overall Binary Pixel Accuracy: {accuracy:.4f}")
+        binary_accuracies[name] = accuracy
+        
+        cm = confusion_matrix(all_true_labels_binary, pred_labels_binary)
+        plt.figure(figsize=(8, 6))
+        sns.heatmap(cm, annot=True, fmt='d', cmap='Greens', xticklabels=BINARY_CLASS_NAMES, yticklabels=BINARY_CLASS_NAMES)
         plt.title(f'Confusion Matrix - {name}', fontsize=16)
         plt.ylabel('True Label')
         plt.xlabel('Predicted Label')
-        plt.savefig(os.path.join(output_folder, f'confusion_matrix_{name}.png'), bbox_inches='tight')
-        plt.close() # Close the plot to free up memory
+        plt.savefig(os.path.join(output_folder, f'binary_confusion_matrix_{name}.png'), bbox_inches='tight')
+        plt.close()
 
-    return model_accuracies
+    return binary_accuracies
 
 def save_visualizations(models_dict, val_data, output_folder, num_samples=5):
     """Saves model prediction visualizations to files."""
@@ -257,6 +330,7 @@ def save_visualizations(models_dict, val_data, output_folder, num_samples=5):
     plt.tight_layout()
     plt.savefig(os.path.join(output_folder, 'prediction_visualizations.png'), bbox_inches='tight')
     plt.close()
+
 
 def save_training_histories(history_dict, output_folder):
     """Saves plots of training histories to a file."""
@@ -297,47 +371,60 @@ def log_experiment(log_file_path, run_data):
 # --- 5. Main Execution Block ---
 # =============================================================================
 def main():
-    """Main function to orchestrate the entire workflow."""
+    """Main function to orchestrate the workflow."""
     start_time = time.time()
     
-    print("="*60 + "\n--- Starting Deforestation Model Training Workflow ---\n" + "="*60)
-    print(f"TensorFlow Version: {tf.__version__}")
-    print(f"Num GPUs Available: {len(tf.config.list_physical_devices('GPU'))}")
+    print("="*60 + "\n--- Starting Deforestation Model Workflow ---\n" + "="*60)
+    
+    # --- Get and Log Hardware Info ---
+    gpu_info_str = get_gpu_info()
+    cpu_info_str = f"{psutil.cpu_count(logical=False)} Physical Cores, {psutil.cpu_count(logical=True)} Total Cores"
+    print(f"GPU Info: {gpu_info_str}")
+    print(f"CPU Info: {cpu_info_str}")
 
-    # Create output directory for this run
+    # Create output directory
     run_timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     run_output_folder = os.path.join(OUTPUT_FOLDER, run_timestamp)
     os.makedirs(run_output_folder, exist_ok=True)
-    print(f"All outputs for this run will be saved in: {run_output_folder}")
+    print(f"All outputs will be saved in: {run_output_folder}")
 
-    # Build dataset
-    train_ds, val_ds, train_samples, val_samples = build_dataset(FILE_PATTERN, BATCH_SIZE, BUFFER_SIZE, VALIDATION_SPLIT)
+    # Build dataset and get class weights
+    train_ds, val_ds, train_samples, val_samples, class_weights = build_dataset(
+        FILE_PATTERN, BATCH_SIZE, BUFFER_SIZE, VALIDATION_SPLIT
+    )
 
-    # Define models to train
+    # Define models to train (make sure num_classes is passed correctly)
     models_to_train = {
-        "U-Net": build_unet_model(),
-        # Add other models here for comparison, e.g.:
-        # "ResU-Net": build_resunet_model(),
+        "U-Net": build_unet_model(num_classes=NUM_CLASSES),
     }
 
     # Train models
-    histories = {name: compile_and_train(model, train_ds, val_ds, EPOCHS, run_output_folder)
-                 for name, model in models_to_train.items()}
+    histories = {
+        name: compile_and_train(model, train_ds, val_ds, EPOCHS, run_output_folder, class_weights)
+        for name, model in models_to_train.items()
+    }
     
     # Load best models for evaluation
-    best_models = {name: tf.keras.models.load_model(os.path.join(run_output_folder, f'best_model_{name}.keras'))
-                   for name in models_to_train.keys()}
+    best_models = {
+        name: tf.keras.models.load_model(os.path.join(run_output_folder, f'best_model_{name}.keras'))
+        for name in models_to_train.keys()
+    }
 
-    # Generate and save reports and visualizations
-    accuracies = evaluate_and_report_metrics(best_models, val_ds, run_output_folder)
-    save_visualizations(best_models, val_ds, run_output_folder)
+    # Evaluate models on the final binary task
+    binary_accuracies = evaluate_and_report_metrics(best_models, val_ds, run_output_folder)
+    save_visualizations(best_models, val_ds, run_output_folder) # Still useful for debugging
     save_training_histories(histories, run_output_folder)
 
     # Log the experiment results
     end_time = time.time()
-    total_run_time = f"{(end_time - start_time) / 60:.2f} minutes"
     
-    best_model_name = max(accuracies, key=accuracies.get) if accuracies else "N/A"
+    elapsed_time = end_time - start_time
+    minutes, seconds = divmod(elapsed_time, 60)
+    total_run_time = f"{int(minutes)}:{seconds:.0f}"
+    print(f"Total Run Time: {total_run_time}")
+
+    
+    best_model_name = max(binary_accuracies, key=binary_accuracies.get) if binary_accuracies else "N/A"
     
     final_run_data = {
         'timestamp': run_timestamp,
@@ -347,9 +434,11 @@ def main():
         'batch_size': BATCH_SIZE,
         'epochs_run': EPOCHS,
         'best_model_name': best_model_name,
-        'best_model_accuracy': accuracies.get(best_model_name, None),
+        'best_model_val_accuracy': binary_accuracies.get(best_model_name, None),
         'notes': RUN_NOTES,
-        'total_run_time': total_run_time
+        'total_run_time': total_run_time,
+        'cpu_info': cpu_info_str,
+        'gpu_info': gpu_info_str
     }
     log_experiment(LOG_FILE, final_run_data)
     
