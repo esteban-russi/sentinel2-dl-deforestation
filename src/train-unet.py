@@ -1,5 +1,6 @@
+
 """
-train_models_4class.py
+unet-train.py
 
 This script performs an end-to-end training and evaluation workflow for a
 4-class land cover segmentation task, with a final evaluation on a binary
@@ -14,6 +15,8 @@ Workflow:
 6. Saves all results (models, plots, reports) to a timestamped folder.
 7. Logs a summary, including hardware info, to a CSV file.
 """
+# --- Run-specific Notes ---
+RUN_NOTES = "VALIDATION_STEPS_PER_EPOCH 30 to 15, unet-train full run, 50 epochs, batch_size 5"
 
 # =============================================================================
 # --- 0. Preamble and Imports ---
@@ -27,7 +30,9 @@ import pandas as pd
 import numpy as np
 import tensorflow as tf
 from tensorflow.keras import layers, Model
+from matplotlib.patches import Patch
 import matplotlib.pyplot as plt
+from matplotlib.colors import ListedColormap, BoundaryNorm
 import seaborn as sns
 from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
 import psutil
@@ -38,8 +43,6 @@ plt.switch_backend('Agg')
 # =============================================================================
 # --- 1. Configuration & Constants (Refactored for 4-Class Task) ---
 # =============================================================================
-# --- Run-specific Notes ---
-RUN_NOTES = "U-Net 4-class training (Trees, Grass, Shrub, Other) with class weights. Binary Forest/Non-Forest final eval."
 
 # --- File & Path Configuration ---
 DATA_FOLDER = 'tfrecords/'
@@ -68,11 +71,12 @@ CLASS_NAMES_4 = ['Other', 'Trees', 'Grass', 'Shrub/Scrub']
 BINARY_CLASS_NAMES = ['Non-Forest', 'Forest']
 
 # --- Training Hyperparameters ---
-BATCH_SIZE = 32
+BATCH_SIZE = 5
 BUFFER_SIZE = 1000
 EPOCHS = 50
 VALIDATION_SPLIT = 0.1
-
+VALIDATION_STEPS_PER_EPOCH = 15 
+STEPS_PER_EPOCH = 2051//BATCH_SIZE
 # =============================================================================
 # --- 2. Data Pipeline (Refactored for 4-Class Task) ---
 # =============================================================================
@@ -157,10 +161,11 @@ def build_dataset(file_pattern, batch_size, buffer_size, val_split):
     dataset = dataset.shuffle(buffer_size)
     
     train_size = int((1 - val_split) * dataset_size)
-    #train_size = 10
+    #train_size = 10 #ONLY FOR TESTING
     
     train_dataset = dataset.take(train_size)
     validation_dataset = dataset.skip(train_size)
+    #validation_dataset = dataset.shuffle(100).take(2) #ONLY FOR TESTING
     
     print(f"Splitting into {train_size} training samples and {dataset_size - train_size} validation samples.")
     
@@ -173,7 +178,7 @@ def build_dataset(file_pattern, batch_size, buffer_size, val_split):
     print("Data pipeline built and split successfully.")
     
     return train_dataset, validation_dataset, train_size, dataset_size - train_size, class_weights
-
+    
 # =============================================================================
 # --- 3. Model Definition ---
 # =============================================================================
@@ -220,11 +225,12 @@ def build_unet_model(input_shape=(PATCH_SIZE, PATCH_SIZE, NUM_BANDS), num_classe
 # --- 4. Training and Evaluation Functions (Refactored for 4-Class & Binary) ---
 # =============================================================================
 def compile_and_train(model, train_data, val_data, epochs, output_folder, class_weights):
-    """Compiles and trains the model, using class weights and monitoring val_IoU."""
+    """
+    Compiles and trains the model, returning the history and the actual number of epochs run.
+    """
     model_name = model.name
     print(f"\n--- Starting Workflow for Model: {model_name} ---")
     
-    # Find the name of the IoU metric for monitoring
     iou_metric = tf.keras.metrics.OneHotIoU(num_classes=NUM_CLASSES, target_class_ids=list(range(NUM_CLASSES)))
     
     model.compile(optimizer='adam',
@@ -233,24 +239,45 @@ def compile_and_train(model, train_data, val_data, epochs, output_folder, class_
     
     print(f"Model '{model_name}' compiled successfully.")
     
-    # Monitor validation IoU for saving the best model and for early stopping
     monitor_metric = f'val_{iou_metric.name}'
+    
+    # --- We need a reference to the EarlyStopping callback to get its status later ---
+    early_stopping_callback = tf.keras.callbacks.EarlyStopping(
+        monitor=monitor_metric, mode='max', patience=10, verbose=1, restore_best_weights=True
+    )
+    
     callbacks = [
         tf.keras.callbacks.ModelCheckpoint(os.path.join(output_folder, f'best_model_{model_name}.keras'),
                                            save_best_only=True, monitor=monitor_metric, mode='max', verbose=1),
-        tf.keras.callbacks.EarlyStopping(monitor=monitor_metric, mode='max', patience=10, verbose=1, restore_best_weights=True)
+        early_stopping_callback # Add the callback instance here
     ]
     
     history = model.fit(
         train_data,
         epochs=epochs,
         validation_data=val_data,
+        steps_per_epoch=STEPS_PER_EPOCH,
+        validation_steps=VALIDATION_STEPS_PER_EPOCH, 
         callbacks=callbacks,
-        class_weight=class_weights, # Pass the calculated class weights
+        class_weight=class_weights,
         verbose=2
     )
-    print(f"--- Finished Training: {model_name} ---")
-    return history
+
+    
+    # --- NEW: Capture the early stopping epoch ---
+    # The `stopped_epoch` attribute is 0 if it didn't stop early.
+    stopped_epoch = early_stopping_callback.stopped_epoch
+    if stopped_epoch > 0:
+        # The epoch number is 0-indexed, so we add 1 for a human-readable count.
+        epochs_actually_run = stopped_epoch + 1
+        print(f"--- Early stopping triggered at epoch {epochs_actually_run} ---")
+    else:
+        # If it didn't stop early, it completed all configured epochs.
+        epochs_actually_run = epochs
+        print(f"--- Finished Training for {epochs} epochs (no early stopping) ---")
+
+    # --- THE FIX: Return both the history object AND the calculated number of epochs ---
+    return history, epochs_actually_run
 
 def evaluate_and_report_metrics(models_dict, validation_dataset, output_folder):
     """
@@ -290,7 +317,7 @@ def evaluate_and_report_metrics(models_dict, validation_dataset, output_folder):
         
         cm = confusion_matrix(all_true_labels_binary, pred_labels_binary)
         plt.figure(figsize=(8, 6))
-        sns.heatmap(cm, annot=True, fmt='d', cmap='Greens', xticklabels=BINARY_CLASS_NAMES, yticklabels=BINARY_CLASS_NAMES)
+        sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=BINARY_CLASS_NAMES, yticklabels=BINARY_CLASS_NAMES)
         plt.title(f'Confusion Matrix - {name}', fontsize=16)
         plt.ylabel('True Label')
         plt.xlabel('Predicted Label')
@@ -299,8 +326,12 @@ def evaluate_and_report_metrics(models_dict, validation_dataset, output_folder):
 
     return binary_accuracies
 
+    
 def save_visualizations(models_dict, val_data, output_folder, num_samples=5):
-    """Saves model prediction visualizations to files."""
+    """
+    Saves model prediction visualizations to files using a custom, logical
+    4-class color palette and legend.
+    """
     print("\n--- Saving Final Prediction Visualizations ---")
     if not models_dict: return
 
@@ -308,46 +339,85 @@ def save_visualizations(models_dict, val_data, output_folder, num_samples=5):
     true_labels = np.argmax(label_batch.numpy(), axis=-1)
     predictions = {name: np.argmax(model.predict(image_batch, verbose=0), axis=-1) for name, model in models_dict.items()}
     
+    # ------------------- MODIFICATION START -------------------
+    # Define a logical color palette for the 4 classes
+    # 0: Other -> Grey
+    # 1: Trees -> Dark Green
+    # 2: Grass -> Light Green
+    # 3: Shrub/Scrub -> Olive/Yellow-Green
+    VIS_PALETTE_4_CLASS = ['#9B9B9B', '#006400', '#88b053', '#dfc35a']
+    
+    # Create the custom colormap and normalization object
+    dw_colormap_4 = ListedColormap(VIS_PALETTE_4_CLASS)
+    bounds = np.arange(-0.5, NUM_CLASSES, 1) # NUM_CLASSES is 4
+    dw_norm_4 = BoundaryNorm(bounds, dw_colormap_4.N)
+    # -------------------- MODIFICATION END --------------------
+    
     num_models = len(models_dict)
     fig_cols = 2 + num_models
     
-    plt.figure(figsize=(5 * fig_cols, 5 * num_samples))
+    # Create the figure object
+    fig, axes = plt.subplots(num_samples, fig_cols, figsize=(5 * fig_cols, 5 * num_samples))
+    # Make sure axes is always a 2D array for consistent indexing
+    if num_samples == 1:
+        axes = np.expand_dims(axes, axis=0)
+
     for i in range(min(num_samples, image_batch.shape[0])):
-        plt.subplot(num_samples, fig_cols, i * fig_cols + 1)
+        # Plot Input Image
+        ax = axes[i, 0]
         tci_image = image_batch.numpy()[i][..., TCI_INDICES]
-        plt.imshow(np.clip(tci_image, 0, 1) ** (1 / 1.8))
-        plt.title(f"Input #{i+1}"); plt.axis('off')
+        ax.imshow(np.clip(tci_image, 0, 1) ** (1 / 1.8))
+        ax.set_title(f"Input #{i+1}"); ax.axis('off')
 
-        plt.subplot(num_samples, fig_cols, i * fig_cols + 2)
-        plt.imshow(true_labels[i], cmap='jet', vmin=0, vmax=NUM_CLASSES-1)
-        plt.title("Ground Truth"); plt.axis('off')
+        # Plot Ground Truth
+        ax = axes[i, 1]
+        # Apply the new custom colormap and normalization
+        ax.imshow(true_labels[i], cmap=dw_colormap_4, norm=dw_norm_4)
+        ax.set_title("Ground Truth"); ax.axis('off')
         
+        # Plot each model's prediction
         for j, (name, pred_labels) in enumerate(predictions.items()):
-            plt.subplot(num_samples, fig_cols, i * fig_cols + 3 + j)
-            plt.imshow(pred_labels[i], cmap='jet', vmin=0, vmax=NUM_CLASSES-1)
-            plt.title(f"{name} Prediction"); plt.axis('off')
+            ax = axes[i, 2 + j]
+            # Apply the new custom colormap and normalization
+            ax.imshow(pred_labels[i], cmap=dw_colormap_4, norm=dw_norm_4)
+            ax.set_title(f"{name} Prediction"); ax.axis('off')
 
-    plt.tight_layout()
+    # ------------------- MODIFICATION START -------------------
+    # Create a single, shared legend for the entire figure
+    patches = [Patch(color=VIS_PALETTE_4_CLASS[i], label=CLASS_NAMES_4[i]) for i in range(NUM_CLASSES)]
+    fig.legend(handles=patches, bbox_to_anchor=(1.05, 1), loc='upper left', title="4-Class Legend", fontsize='large', title_fontsize='x-large')
+    # -------------------- MODIFICATION END --------------------
+
+    # Adjust layout to make room for the legend
+    plt.tight_layout(rect=[0, 0, 0.85, 1.0]) # The right boundary is reduced
     plt.savefig(os.path.join(output_folder, 'prediction_visualizations.png'), bbox_inches='tight')
     plt.close()
 
-
 def save_training_histories(history_dict, output_folder):
-    """Saves plots of training histories to a file."""
+    """Saves plots of training histories, now including accuracy."""
     print("\n--- Saving Training History Plots ---")
-    plt.figure(figsize=(20, 7))
+    # --- NEW: Number of plots is now 3 ---
+    plt.figure(figsize=(24, 6))
     plt.suptitle('Model Performance Comparison', fontsize=16)
 
     # Plot Loss
-    plt.subplot(1, 2, 1)
+    plt.subplot(1, 3, 1)
     for name, history in history_dict.items():
         plt.plot(history.history['loss'], label=f'{name} Train Loss', linestyle='--')
         plt.plot(history.history['val_loss'], label=f'{name} Val Loss', linestyle='-')
     plt.title('Training & Validation Loss'); plt.xlabel('Epoch'); plt.ylabel('Loss')
     plt.legend(); plt.grid(True)
 
+    # Plot Accuracy
+    plt.subplot(1, 3, 2)
+    for name, history in history_dict.items():
+        plt.plot(history.history['accuracy'], label=f'{name} Train Accuracy', linestyle='--')
+        plt.plot(history.history['val_accuracy'], label=f'{name} Val Accuracy', linestyle='-')
+    plt.title('Training & Validation Accuracy'); plt.xlabel('Epoch'); plt.ylabel('Accuracy')
+    plt.legend(); plt.grid(True)
+
     # Plot IoU
-    plt.subplot(1, 2, 2)
+    plt.subplot(1, 3, 3)
     for name, history in history_dict.items():
         iou_key = next((k for k in history.history if 'one_hot_io_u' in k and 'val_' not in k), None)
         val_iou_key = next((k for k in history.history if 'val_one_hot_io_u' in k), None)
@@ -357,6 +427,7 @@ def save_training_histories(history_dict, output_folder):
     plt.title('Training & Validation Mean IoU'); plt.xlabel('Epoch'); plt.ylabel('Mean IoU')
     plt.legend(); plt.grid(True)
 
+    plt.tight_layout(rect=[0, 0.03, 1, 0.95])
     plt.savefig(os.path.join(output_folder, 'training_histories.png'), bbox_inches='tight')
     plt.close()
 
@@ -372,10 +443,10 @@ def log_experiment(log_file_path, run_data):
 # =============================================================================
 def main():
     """Main function to orchestrate the workflow."""
-    start_time = time.time()
+    
     
     print("="*60 + "\n--- Starting Deforestation Model Workflow ---\n" + "="*60)
-    
+    print("Run notes:", RUN_NOTES)
     # --- Get and Log Hardware Info ---
     gpu_info_str = get_gpu_info()
     cpu_info_str = f"{psutil.cpu_count(logical=False)} Physical Cores, {psutil.cpu_count(logical=True)} Total Cores"
@@ -397,34 +468,33 @@ def main():
     models_to_train = {
         "U-Net": build_unet_model(num_classes=NUM_CLASSES),
     }
-
-    # Train models
-    histories = {
-        name: compile_and_train(model, train_ds, val_ds, EPOCHS, run_output_folder, class_weights)
-        for name, model in models_to_train.items()
-    }
     
-    # Load best models for evaluation
+    # Train models 
+    start_time = time.time()
+
+    # --- Dictionaries to store histories AND early stopping info ---
+    histories = {}
+    epochs_run_dict = {}
+
+    for name, model in models_to_train.items():
+        history, epochs_run = compile_and_train(model, train_ds, val_ds, EPOCHS, run_output_folder, class_weights)
+        histories[name] = history
+        epochs_run_dict[name] = epochs_run
+    
     best_models = {
         name: tf.keras.models.load_model(os.path.join(run_output_folder, f'best_model_{name}.keras'))
         for name in models_to_train.keys()
     }
 
-    # Evaluate models on the final binary task
     binary_accuracies = evaluate_and_report_metrics(best_models, val_ds, run_output_folder)
-    save_visualizations(best_models, val_ds, run_output_folder) # Still useful for debugging
+    save_visualizations(best_models, val_ds, run_output_folder)
     save_training_histories(histories, run_output_folder)
 
-    # Log the experiment results
     end_time = time.time()
-    
-    elapsed_time = end_time - start_time
-    minutes, seconds = divmod(elapsed_time, 60)
-    total_run_time = f"{int(minutes)}:{seconds:.0f}"
-    print(f"Total Run Time: {total_run_time}")
-
+    total_run_time = f"{(end_time - start_time) / 60:.2f}"
     
     best_model_name = max(binary_accuracies, key=binary_accuracies.get) if binary_accuracies else "N/A"
+    
     
     final_run_data = {
         'timestamp': run_timestamp,
@@ -432,7 +502,7 @@ def main():
         'training_samples': train_samples,
         'validation_samples': val_samples,
         'batch_size': BATCH_SIZE,
-        'epochs_run': EPOCHS,
+        'epochs_run': str(EPOCHS)+", stopped_at: "+ str(epochs_run_dict.get(best_model_name, None)),
         'best_model_name': best_model_name,
         'best_model_val_accuracy': binary_accuracies.get(best_model_name, None),
         'notes': RUN_NOTES,

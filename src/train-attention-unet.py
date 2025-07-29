@@ -14,7 +14,7 @@ Workflow:
 7. Logs a summary of the run to the central experiment log.
 """
 # --- Run-specific Notes ---
-RUN_NOTES = "Test on Attention U-Net 4-class training with class weights. Binary Forest/Non-Forest final eval. CSF3"
+RUN_NOTES = "full run, batch_size=from 10 to 5, 50 epochs, kept VALIDATION_STEPS_PER_EPOCH"
 
 # =============================================================================
 # --- 0. Preamble and Imports ---
@@ -63,10 +63,11 @@ CLASS_NAMES_4 = ['Other', 'Trees', 'Grass', 'Shrub/Scrub']
 BINARY_CLASS_NAMES = ['Non-Forest', 'Forest']
 
 # --- Training Hyperparameters ---
-BATCH_SIZE = 1
+BATCH_SIZE = 5
 BUFFER_SIZE = 1000
-EPOCHS = 1
+EPOCHS = 50
 VALIDATION_SPLIT = 0.1
+VALIDATION_STEPS_PER_EPOCH = 15
 
 # =============================================================================
 # --- 2. Data Pipeline (Identical to previous script) ---
@@ -261,6 +262,8 @@ def compile_and_train(model, train_data, val_data, epochs, output_folder, class_
         train_data,
         epochs=epochs,
         validation_data=val_data,
+        # --- ADD THIS LINE ---
+        validation_steps=VALIDATION_STEPS_PER_EPOCH, 
         callbacks=callbacks,
         class_weight=class_weights,
         verbose=2
@@ -444,7 +447,7 @@ def log_experiment(log_file_path, run_data):
 def main():
     """Main function to orchestrate the Attention U-Net workflow."""
     print("="*60 + "\n--- Starting Attention U-Net Model Workflow ---\n" + "="*60)
-    
+    print("Run notes:", RUN_NOTES)
     # --- Setup ---
     gpu_info_str = get_gpu_info()
     cpu_info_str = f"{psutil.cpu_count(logical=False)} Cores, {psutil.cpu_count(logical=True)} Threads"
