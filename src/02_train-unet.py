@@ -15,8 +15,6 @@ Workflow:
 6. Saves all results (models, plots, reports) to a timestamped folder.
 7. Logs a summary, including hardware info, to a CSV file.
 """
-# --- Run-specific Notes ---
-RUN_NOTES = "VALIDATION_STEPS_PER_EPOCH 30 to 15, unet-train full run, 50 epochs, batch_size 5"
 
 # =============================================================================
 # --- 0. Preamble and Imports ---
@@ -72,11 +70,18 @@ BINARY_CLASS_NAMES = ['Non-Forest', 'Forest']
 
 # --- Training Hyperparameters ---
 BATCH_SIZE = 5
-BUFFER_SIZE = 1000
+BUFFER_SIZE = 250
 EPOCHS = 50
 VALIDATION_SPLIT = 0.1
 VALIDATION_STEPS_PER_EPOCH = 15 
 STEPS_PER_EPOCH = 2051//BATCH_SIZE
+
+# --- Run-specific Notes ---
+RUN_NOTES = f"full run; BUFFER_SIZE = {BUFFER_SIZE}; BATCH_SIZE = {BATCH_SIZE}; EPOCHS = {EPOCHS}; kept VAL_STEPS_PER_EPOCH = {VALIDATION_STEPS_PER_EPOCH}"
+print("==================================================================")
+print(RUN_NOTES)
+print("==================================================================")
+
 # =============================================================================
 # --- 2. Data Pipeline (Refactored for 4-Class Task) ---
 # =============================================================================
@@ -86,7 +91,7 @@ def get_gpu_info():
         result = subprocess.run(['nvidia-smi', '--query-gpu=name,memory.total,driver_version', '--format=csv,noheader,nounits'],
                                 stdout=subprocess.PIPE, text=True)
         gpu_name, memory, driver = result.stdout.strip().split(',')
-        return f"{gpu_name.strip()} ({memory.strip()}MiB, Driver: {driver.strip()})"
+        return f"{gpu_name.strip()} ({memory.strip()}MiB; Driver: {driver.strip()})"
     except (FileNotFoundError, IndexError):
         return "N/A (nvidia-smi not found or failed)"
 
@@ -442,14 +447,12 @@ def log_experiment(log_file_path, run_data):
 # --- 5. Main Execution Block ---
 # =============================================================================
 def main():
-    """Main function to orchestrate the workflow."""
-    
-    
+    """Main function to orchestrate the workflow."""  
     print("="*60 + "\n--- Starting Deforestation Model Workflow ---\n" + "="*60)
     print("Run notes:", RUN_NOTES)
     # --- Get and Log Hardware Info ---
     gpu_info_str = get_gpu_info()
-    cpu_info_str = f"{psutil.cpu_count(logical=False)} Physical Cores, {psutil.cpu_count(logical=True)} Total Cores"
+    cpu_info_str = f"{psutil.cpu_count(logical=False)} Physical Cores; {psutil.cpu_count(logical=True)} Total Cores"
     print(f"GPU Info: {gpu_info_str}")
     print(f"CPU Info: {cpu_info_str}")
 
@@ -463,16 +466,15 @@ def main():
     train_ds, val_ds, train_samples, val_samples, class_weights = build_dataset(
         FILE_PATTERN, BATCH_SIZE, BUFFER_SIZE, VALIDATION_SPLIT
     )
-
+    
+    # --- Model Training ---
     # Define models to train (make sure num_classes is passed correctly)
     models_to_train = {
         "U-Net": build_unet_model(num_classes=NUM_CLASSES),
     }
-    
-    # Train models 
-    start_time = time.time()
-
+     
     # --- Dictionaries to store histories AND early stopping info ---
+    start_time = time.time()
     histories = {}
     epochs_run_dict = {}
 
@@ -481,28 +483,28 @@ def main():
         histories[name] = history
         epochs_run_dict[name] = epochs_run
     
+    # --- Evaluation & Reporting ---
     best_models = {
         name: tf.keras.models.load_model(os.path.join(run_output_folder, f'best_model_{name}.keras'))
         for name in models_to_train.keys()
     }
-
+    best_model_name = "U-Net"
+    
     binary_accuracies = evaluate_and_report_metrics(best_models, val_ds, run_output_folder)
     save_visualizations(best_models, val_ds, run_output_folder)
     save_training_histories(histories, run_output_folder)
-
+    
+    # --- Final Logging ---
     end_time = time.time()
     total_run_time = f"{(end_time - start_time) / 60:.2f}"
-    
-    best_model_name = max(binary_accuracies, key=binary_accuracies.get) if binary_accuracies else "N/A"
-    
-    
+     
     final_run_data = {
         'timestamp': run_timestamp,
         'models_trained': ", ".join(histories.keys()),
         'training_samples': train_samples,
         'validation_samples': val_samples,
         'batch_size': BATCH_SIZE,
-        'epochs_run': str(EPOCHS)+", stopped_at: "+ str(epochs_run_dict.get(best_model_name, None)),
+        'epochs_run': str(EPOCHS)+"; stopped_at: "+ str(epochs_run_dict.get(best_model_name, None)),
         'best_model_name': best_model_name,
         'best_model_val_accuracy': binary_accuracies.get(best_model_name, None),
         'notes': RUN_NOTES,

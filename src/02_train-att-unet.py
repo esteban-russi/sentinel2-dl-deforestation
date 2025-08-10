@@ -13,8 +13,6 @@ Workflow:
 6. Saves all results (model, plots, reports) to a new timestamped folder.
 7. Logs a summary of the run to the central experiment log.
 """
-# --- Run-specific Notes ---
-RUN_NOTES = "full run, batch_size=from 10 to 5, 50 epochs, kept VALIDATION_STEPS_PER_EPOCH"
 
 # =============================================================================
 # --- 0. Preamble and Imports ---
@@ -64,10 +62,18 @@ BINARY_CLASS_NAMES = ['Non-Forest', 'Forest']
 
 # --- Training Hyperparameters ---
 BATCH_SIZE = 5
-BUFFER_SIZE = 1000
+BUFFER_SIZE = 250
 EPOCHS = 50
 VALIDATION_SPLIT = 0.1
 VALIDATION_STEPS_PER_EPOCH = 15
+
+
+# --- Run-specific Notes ---
+RUN_NOTES = f"full run; BUFFER_SIZE = {BUFFER_SIZE}; BATCH_SIZE = {BATCH_SIZE}; EPOCHS = {EPOCHS}; kept VAL_STEPS_PER_EPOCH = {VALIDATION_STEPS_PER_EPOCH}"
+print("==================================================================")
+print(RUN_NOTES)
+print("==================================================================")
+
 
 # =============================================================================
 # --- 2. Data Pipeline (Identical to previous script) ---
@@ -80,10 +86,10 @@ def get_gpu_info():
     """Retrieves GPU information using nvidia-smi."""
     try:
         result = subprocess.run(['nvidia-smi', '--query-gpu=name,memory.total,driver_version', '--format=csv,noheader,nounits'],
-                                stdout=subprocess.PIPE, text=True, check=True)
+                                stdout=subprocess.PIPE, text=True)
         gpu_name, memory, driver = result.stdout.strip().split(',')
-        return f"{gpu_name.strip()} ({memory.strip()}MiB, Driver: {driver.strip()})"
-    except (FileNotFoundError, IndexError, subprocess.CalledProcessError):
+        return f"{gpu_name.strip()} ({memory.strip()}MiB; Driver: {driver.strip()})"
+    except (FileNotFoundError, IndexError):
         return "N/A (nvidia-smi not found or failed)"
 
 def parse_tfrecord_4_class(example_proto):
@@ -114,7 +120,11 @@ def calculate_class_weights(dataset):
     class_weights = 1 / (class_frequencies + 1e-6)
     class_weights = class_weights / np.sum(class_weights) * NUM_CLASSES
     class_weight_dict = {i: weight for i, weight in enumerate(class_weights)}
-    print("Class Distribution and Weights calculated.")
+    
+    print("Class Distribution and Weights:")
+    for i in range(NUM_CLASSES):
+        print(f"  - {CLASS_NAMES_4[i]:<12}: Freq={class_frequencies[i]:.4f}, Weight={class_weight_dict[i]:.4f}")
+        
     return class_weight_dict
 
 def build_dataset(file_pattern, batch_size, buffer_size, val_split):
@@ -483,22 +493,25 @@ def main():
         name: tf.keras.models.load_model(os.path.join(run_output_folder, f'best_model_{name}.keras'))
         for name in models_to_train.keys()
     }
+    best_model_name = "Attention_U-Net"
+    
     binary_accuracies = evaluate_and_report_metrics(best_models, val_ds, run_output_folder)
     save_visualizations(best_models, val_ds, run_output_folder)
     save_training_histories(histories, run_output_folder)
-
+    
     # --- Final Logging ---
-    total_run_time = f"{(time.time() - start_time) / 60:.2f} minutes"
-    best_model_name = "Attention_U-Net"
+    end_time = time.time()
+    total_run_time = f"{(end_time - start_time) / 60:.2f}"
+     
     final_run_data = {
         'timestamp': run_timestamp,
-        'model_trained': best_model_name,
+        'models_trained': ", ".join(histories.keys()),
         'training_samples': train_samples,
         'validation_samples': val_samples,
         'batch_size': BATCH_SIZE,
-        'epochs_configured': EPOCHS,
-        'epochs_run': epochs_run_dict.get(best_model_name, None),
-        'final_binary_accuracy': binary_accuracies.get(best_model_name, None),
+        'epochs_run': str(EPOCHS)+"; stopped_at: "+ str(epochs_run_dict.get(best_model_name, None)),
+        'best_model_name': best_model_name,
+        'best_model_val_accuracy': binary_accuracies.get(best_model_name, None),
         'notes': RUN_NOTES,
         'total_run_time': total_run_time,
         'cpu_info': cpu_info_str,
@@ -506,7 +519,7 @@ def main():
     }
     log_experiment(LOG_FILE, final_run_data)
     
-    print("\n--- Attention U-Net Workflow Complete ---")
+    print("\n--- Workflow Complete ---")
 
 if __name__ == '__main__':
     main()
