@@ -37,7 +37,7 @@ plt.switch_backend('Agg')
 # =============================================================================
 # --- Path Configuration ---
 # Point this to your best saved model from the training run
-MODEL_FILE_PATH = 'run_outputs/20250809_210609/best_model_Attention_U-Net.keras'
+MODEL_FILE_PATH = 'best_models/best_model_Attention_U-Net.keras'
 # Point these to the folders containing your downloaded inference TFRecords
 INFERENCE_T1_FOLDER = 'inference_tfrecords_2021/' # "Before" data
 INFERENCE_T2_FOLDER = 'inference_tfrecords_2023/' # "After" data
