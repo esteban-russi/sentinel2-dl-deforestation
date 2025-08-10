@@ -48,7 +48,7 @@ The project is divided into two main phases:
 ├── notebooks/
 │   ├── 00-data-exploration.ipynb
 ├── src/
-│   ├── 01-data-export-training.py
+│   ├── 01-data-export.py
 │   ├── 02.0-train-unet.py
 │   ├── 02.1-train-att-unet.py
 │   ├── 03-change-detection-analysis.py
