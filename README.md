@@ -46,14 +46,12 @@ The project is divided into two main phases:
 ├── README.md
 ├── requirements.txt
 ├── notebooks/
-│   ├── 01_GEE_Data_Exploration_and_Export.ipynb
-│   └── 02_Model_Training_and_Evaluation.ipynb
+│   ├── 00-data-exploration.ipynb
 ├── src/
-│   ├── gee_export.py
-│   ├── data_pipeline.py
-│   ├── model.py
-│   ├── train.py
-│   └── evaluate.py
+│   ├── 01-data_export_training.py
+│   ├── 02.0-train-unet.py
+│   ├── 02.1-train-att-unet.py
+│   ├── 03-change_detection_analysis.py
 └── reports/
     └── figures/
 ```
