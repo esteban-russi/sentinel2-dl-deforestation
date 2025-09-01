@@ -113,7 +113,7 @@ This project successfully developed and validated a deep learning pipeline for d
 
 Two models, a baseline U-Net and an Attention U-Net, were trained on a nuanced 4-class land cover problem. The Attention U-Net demonstrated a more stable training process and achieved a higher peak validation Mean IoU (**0.674**) compared to the standard U-Net (**0.609**), indicating a better performance on the core segmentation task.
 
-![Learning Curves](figures/figure_3.png)
+![Learning Curves](figures/figure_3.jpg)
 > *Figure: Training and validation learning curves. The Attention U-Net (bottom) shows a more stable progression and reaches a higher peak IoU.*
 
 In the final binary (Forest vs. Non-Forest) evaluation, the Attention U-Net proved to be the more effective and balanced model for the project's goal.
