@@ -164,3 +164,4 @@ The success of this pipeline opens several exciting avenues for future research 
 ## Acknowledgements
 - The Copernicus Sentinel-2 program for providing open-access satellite imagery.
 - The Google Earth Engine and Dynamic World teams for their invaluable data and platforms.
+-  To my supervisors, Professor David Schultz and Dr. Polyanna Bispo, for believing in this project and guiding it with their domain knowledge.
