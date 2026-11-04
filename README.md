@@ -64,6 +64,7 @@ The project is divided into two main phases:
 │   ├── 00-data-exploration.ipynb
 ├── src/
 │   ├── 01-data-export.py
+│   ├── pipeline.py                    # shared data pipeline, training, evaluation & logging
 │   ├── 02.0-train-unet.py
 │   ├── 02.1-train-att-unet.py
 │   ├── 03-change-detection-analysis.py
@@ -77,8 +78,8 @@ The project is divided into two main phases:
 
 1.  **Clone the repository:**
     ```bash
-    git clone https://github.com/your-username/sentinel2-unet-deforestation.git
-    cd sentinel2-unet-deforestation
+    git clone https://github.com/esteban-russi/sentinel2-dl-deforestation.git
+    cd sentinel2-dl-deforestation
     ```
 
 2.  **Set up a Python virtual environment (recommended):**
@@ -99,11 +100,29 @@ The project is divided into two main phases:
 
 ## How to Run
 
-1.  **Data Export:** Open and run the `notebooks/01_GEE_Data_Exploration_and_Export.ipynb` notebook. This will guide you through the GEE data processing and trigger the export script (`src/gee_export.py`). Wait for the export task to complete in Google Drive.
+All scripts are run from the repository root and read/write paths relative to it.
 
-2.  **Download Data:** Manually download the exported TFRecord files from your Google Drive `GEE_Colombia_Production_Export` folder and place them in a `data/tfrecords` directory within this project (create it if it doesn't exist).
+1.  **Data Export (Google Earth Engine):**
+    ```bash
+    python src/01-data-export.py
+    ```
+    This starts the export tasks for the 2022 training patches and the 2021/2023 inference patches. Wait for them to finish in Google Drive.
 
-3.  **Model Training:** Open and run the `notebooks/02_Model_Training_and_Evaluation.ipynb` notebook. This will load the data, train the U-Net model, and generate evaluation results and visualizations.
+2.  **Download Data:** Download the exported TFRecord files from Google Drive:
+    - training patches (`colombia_production_data-*.tfrecord.gz`) into `tfrecords/`
+    - 2021 and 2023 inference patches into `inference_tfrecords_2021/` and `inference_tfrecords_2023/`
+
+3.  **Model Training:** Train either model. Both scripts share the data pipeline, training loop, evaluation and logging in `src/pipeline.py`, and save checkpoints, plots and reports to a timestamped folder in `run_outputs/`.
+    ```bash
+    python src/02.0-train-unet.py      # baseline U-Net
+    python src/02.1-train-att-unet.py  # Attention U-Net
+    ```
+    The train/validation split is fixed by `SPLIT_SEED` in `src/pipeline.py`, so every run validates on the same held-out patches.
+
+4.  **Change Detection:** Copy the best Attention U-Net checkpoint to `best_models/best_model_Attention_U-Net.keras`, then run:
+    ```bash
+    python src/03-change-detection-analysis.py
+    ```
 
 ## Results
 
