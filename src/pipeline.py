@@ -63,6 +63,7 @@ BATCH_SIZE = 5
 BUFFER_SIZE = 250
 EPOCHS = 50
 VALIDATION_SPLIT = 0.1
+SPLIT_SEED = 42  # Fixes which patches end up in the validation split
 VALIDATION_STEPS_PER_EPOCH = 15 
 
 # --- Run-specific Notes ---
@@ -142,30 +143,32 @@ def calculate_class_weights(dataset):
 
 def build_dataset(file_pattern, batch_size, buffer_size, val_split):
     """Builds, splits, and batches the dataset for the 4-class task."""
-    tfrecord_files = glob.glob(file_pattern)
+    # Sort so the split does not depend on the order the filesystem lists files in.
+    tfrecord_files = sorted(glob.glob(file_pattern))
     if not tfrecord_files:
         raise FileNotFoundError(f"No TFRecord files found matching pattern: {file_pattern}")
     print(f"Found {len(tfrecord_files)} TFRecord files.")
 
     raw_dataset = tf.data.TFRecordDataset(tfrecord_files, compression_type='GZIP')
     dataset_size = raw_dataset.reduce(np.int64(0), lambda x, _: x + 1).numpy()
-    
-    # Map with the new 4-class parsing function
-    dataset = raw_dataset.map(parse_tfrecord_4_class, num_parallel_calls=tf.data.AUTOTUNE)
-    dataset = dataset.shuffle(buffer_size)
-    
+
+    # Shuffle ONCE with a fixed seed before splitting. take()/skip() on a dataset that
+    # reshuffles on every iteration (the tf.data default) draws a different split each
+    # epoch, so patches would move between training and validation and the validation
+    # metrics would be computed partly on data the model was trained on.
+    split_dataset = raw_dataset.shuffle(buffer_size, seed=SPLIT_SEED, reshuffle_each_iteration=False)
+
     train_size = int((1 - val_split) * dataset_size)
-    #train_size = 10 #ONLY FOR TESTING
-    
-    train_dataset = dataset.take(train_size)
-    validation_dataset = dataset.skip(train_size)
-    #validation_dataset = dataset.shuffle(100).take(2) #ONLY FOR TESTING
-    
+    train_dataset = split_dataset.take(train_size).map(parse_tfrecord_4_class, num_parallel_calls=tf.data.AUTOTUNE)
+    validation_dataset = split_dataset.skip(train_size).map(parse_tfrecord_4_class, num_parallel_calls=tf.data.AUTOTUNE)
+
     print(f"Splitting into {train_size} training samples and {dataset_size - train_size} validation samples.")
-    
+
     # Calculate class weights ONLY on the training split
     class_weights = calculate_class_weights(train_dataset)
-    
+
+    # Reshuffle the training split every epoch; the validation split keeps a fixed order.
+    train_dataset = train_dataset.shuffle(buffer_size)
     train_dataset = train_dataset.batch(batch_size).prefetch(buffer_size=tf.data.AUTOTUNE)
     validation_dataset = validation_dataset.batch(batch_size).prefetch(buffer_size=tf.data.AUTOTUNE)
     
