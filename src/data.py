@@ -137,7 +137,9 @@ def parse_inference_tfrecord(example_proto):
 def build_inference_dataset(folder_path, batch_size=32):
     """Builds a tf.data pipeline for a given set of inference TFRecord files."""
     file_pattern = os.path.join(folder_path, '*.tfrecord.gz')
-    tfrecord_files = glob.glob(file_pattern)
+    # Sort so patch order follows the exported file names. Change detection pairs
+    # the T1 and T2 patches by position, so both years must be read in the same order.
+    tfrecord_files = sorted(glob.glob(file_pattern))
     if not tfrecord_files:
         raise FileNotFoundError(f"No TFRecord files found in: {folder_path}")
 

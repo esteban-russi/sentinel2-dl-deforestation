@@ -81,3 +81,18 @@ def test_split_is_reproducible_for_a_fixed_seed(tmp_path):
         return patch_ids(val_ds)
 
     assert validation_ids() == validation_ids()
+
+
+def test_inference_files_are_read_in_name_order(tmp_path, monkeypatch):
+    options = tf.io.TFRecordOptions(compression_type='GZIP')
+    file_names = [f'inference_data_2021-{i:05d}.tfrecord.gz' for i in range(3)]
+    for patch_id, file_name in enumerate(file_names):
+        with tf.io.TFRecordWriter(str(tmp_path / file_name), options) as writer:
+            writer.write(make_example(patch_id, np.zeros(PATCH_SIZE**2)))
+    # Simulate a filesystem that lists the files in a different order.
+    listed_in_reverse = [str(tmp_path / name) for name in reversed(file_names)]
+    monkeypatch.setattr(data.glob, 'glob', lambda pattern: listed_in_reverse)
+
+    _, raw_images = data.build_inference_dataset(str(tmp_path), batch_size=2)
+
+    assert [int(image[0, 0, 0]) for image in raw_images.as_numpy_iterator()] == [0, 1, 2]
