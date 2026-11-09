@@ -1,0 +1,14 @@
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# OS specific files
+.DS_Store
+
+# Large datasets and training outputs
+tfrecords/
+inference_tfrecords_*/
+run_outputs/
+best_models/
