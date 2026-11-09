@@ -1,12 +1,7 @@
-import sys
-from pathlib import Path
 import numpy as np
 
-# Ensure src is on sys.path
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / 'src'))
-
 from visualization import get_4_class_colormap
-from config import VIS_PALETTE_4_CLASS, NUM_CLASSES
+from config import NUM_CLASSES
 
 
 def test_colormap_4_class():

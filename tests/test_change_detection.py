@@ -1,10 +1,4 @@
-import sys
-from pathlib import Path
 import numpy as np
-import pytest
-
-# Ensure src is on sys.path
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / 'src'))
 
 from change_detection import (
     reclassify_to_forest_binary,

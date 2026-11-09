@@ -1,22 +1,4 @@
-import sys
-from pathlib import Path
-from unittest.mock import MagicMock
-
-# Ensure repo root and src are in sys.path
-repo_root = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(repo_root / 'src'))
-sys.path.insert(0, str(repo_root))
-
-
-def test_pipeline_exports_and_compatibility():
-    # Setup mock tensorflow and psutil if needed
-    mock_tf = MagicMock()
-    mock_layers = MagicMock()
-    mock_tf.keras.layers = mock_layers
-    sys.modules.setdefault('tensorflow', mock_tf)
-    sys.modules.setdefault('tensorflow.keras', mock_tf.keras)
-    sys.modules.setdefault('tensorflow.keras.layers', mock_layers)
-
+def test_pipeline_exports_and_compatibility(mock_tensorflow):
     import pipeline
 
     expected_symbols = [
