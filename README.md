@@ -59,11 +59,12 @@ The project is divided into two main phases:
 ## Repository Structure
 ```
 ├── README.md
-├── requirements.txt
+├── pyproject.toml                     # pytest & ruff configuration
+├── requirements.txt                   # runtime dependencies
+├── requirements-dev.txt               # + pytest & ruff
 ├── notebooks/
 │   ├── 00-data-exploration.ipynb
 ├── src/
-│   ├── __init__.py
 │   ├── config.py                      # centralized constants, paths & hyperparameters
 │   ├── data.py                        # TFRecord parsing, class weights & tf.data pipelines
 │   ├── models.py                      # reusable conv_block, attention_gate, U-Net & Attention U-Net
@@ -77,6 +78,7 @@ The project is divided into two main phases:
 │   ├── 02.0-train-unet.py             # baseline U-Net training entrypoint
 │   ├── 02.1-train-att-unet.py         # Attention U-Net training entrypoint
 │   ├── 03-change-detection-analysis.py# change detection analysis entrypoint
+├── tests/                             # pytest suite (TensorFlow tests skip if it is not installed)
 └── report/
 │   ├── EAN-11513507-report.pdf
 │   ├── EAN-11513507-slides.pdf
@@ -106,10 +108,18 @@ The project is divided into two main phases:
     ```bash
     earthengine authenticate
     ```
+    The Earth Engine project is set by `GEE_PROJECT` in `src/config.py`.
+
+5.  **Run the tests and linter (optional):**
+    ```bash
+    pip install -r requirements-dev.txt
+    pytest
+    ruff check .
+    ```
 
 ## How to Run
 
-All scripts are run from the repository root and read/write paths relative to it.
+Run the scripts from the repository root. Data, model and output folders are resolved relative to the repository root (see `src/config.py`), and the scripts import each other as top-level modules from `src/`.
 
 1.  **Data Export (Google Earth Engine):**
     ```bash
@@ -121,12 +131,12 @@ All scripts are run from the repository root and read/write paths relative to it
     - training patches (`colombia_production_data-*.tfrecord.gz`) into `tfrecords/`
     - 2021 and 2023 inference patches into `inference_tfrecords_2021/` and `inference_tfrecords_2023/`
 
-3.  **Model Training:** Train either model. Both scripts share the data pipeline, training loop, evaluation and logging in `src/pipeline.py`, and save checkpoints, plots and reports to a timestamped folder in `run_outputs/`.
+3.  **Model Training:** Train either model. Both scripts share the data pipeline, training loop, evaluation and logging in `src/pipeline.py` (built from the modules in `src/`), and save checkpoints, plots and reports to a timestamped folder in `run_outputs/`.
     ```bash
     python src/02.0-train-unet.py      # baseline U-Net
     python src/02.1-train-att-unet.py  # Attention U-Net
     ```
-    The train/validation split is fixed by `SPLIT_SEED` in `src/pipeline.py`, so every run validates on the same held-out patches.
+    The train/validation split is fixed by `SPLIT_SEED` in `src/config.py`, so every run validates on the same held-out patches.
 
 4.  **Change Detection:** Copy the best Attention U-Net checkpoint to `best_models/best_model_Attention_U-Net.keras`, then run:
     ```bash
