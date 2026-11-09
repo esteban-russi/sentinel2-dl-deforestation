@@ -83,6 +83,8 @@ RUN_NOTES = (
 # =============================================================================
 # --- 5. Earth Engine Export Configuration ---
 # =============================================================================
+GEE_PROJECT = 'deforestationsentinel2'  # Google Cloud project registered for Earth Engine
+
 ROI_TRAINING_BBOX = (-74.88851, 1.722, -73.656, 2.712)
 YEAR_TRAINING = 2022
 DRIVE_FOLDER_TRAINING = 'GEE_Colombia_Training_Export'

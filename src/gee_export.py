@@ -8,6 +8,7 @@ Initialization is handled cleanly on-demand rather than immediately on import.
 import ee
 
 from config import (
+    GEE_PROJECT,
     BANDS,
     PATCH_SIZE,
     EXPORT_SCALE,
@@ -19,11 +20,14 @@ from config import (
 )
 
 
-def initialize_ee(project="deforestationsentinel2"):
+def initialize_ee(project=GEE_PROJECT):
     """Initializes Google Earth Engine, authenticating if necessary."""
     try:
         ee.Initialize(project=project)
-    except Exception:
+    except Exception as error:
+        # Usually missing credentials, but print the cause so other failures
+        # (e.g. a wrong project id) are not mistaken for an authentication prompt.
+        print(f"Earth Engine initialization failed ({error}); starting authentication.")
         ee.Authenticate()
         ee.Initialize(project=project)
     print("Google Earth Engine Initialized.")
