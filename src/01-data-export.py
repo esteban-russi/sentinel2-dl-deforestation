@@ -9,8 +9,6 @@ deforestation analysis project. It can be configured to export either:
    the change detection analysis.
 """
 
-import ee
-
 try:
     from .config import (
         BANDS as S2_BANDS,
@@ -53,18 +51,14 @@ except (ImportError, ValueError):
     )
 
 
-# Geometry definitions for GEE
-ROI_TRAINING = ee.Geometry.BBox(*ROI_TRAINING_BBOX)
-ROI_CHANGE_DETECTION = ee.Geometry.BBox(*ROI_CHANGE_DETECTION_BBOX)
-
-
 if __name__ == '__main__':
     initialize_ee()
 
-    # Generate the dataset for training and change detection:
-    run_training_data_export(roi=ROI_TRAINING)
-    run_inference_data_export(YEAR_T1_INFERENCE, roi=ROI_CHANGE_DETECTION)
-    run_inference_data_export(YEAR_T2_INFERENCE, roi=ROI_CHANGE_DETECTION)
+    # Generate the dataset for training and change detection. The export
+    # functions build their ROIs from config, after Earth Engine is initialized.
+    run_training_data_export()
+    run_inference_data_export(YEAR_T1_INFERENCE)
+    run_inference_data_export(YEAR_T2_INFERENCE)
 
     print("\n\n============================================================")
     print("All selected export tasks have been submitted.")
