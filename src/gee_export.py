@@ -7,32 +7,18 @@ Initialization is handled cleanly on-demand rather than immediately on import.
 
 import ee
 
-try:
-    from .config import (
-        BANDS,
-        PATCH_SIZE,
-        EXPORT_SCALE,
-        ROI_TRAINING_BBOX,
-        YEAR_TRAINING,
-        DRIVE_FOLDER_TRAINING,
-        ROI_CHANGE_DETECTION_BBOX,
-        YEAR_T1_INFERENCE,
-        YEAR_T2_INFERENCE,
-        DRIVE_FOLDER_INFERENCE,
-    )
-except (ImportError, ValueError):
-    from config import (
-        BANDS,
-        PATCH_SIZE,
-        EXPORT_SCALE,
-        ROI_TRAINING_BBOX,
-        YEAR_TRAINING,
-        DRIVE_FOLDER_TRAINING,
-        ROI_CHANGE_DETECTION_BBOX,
-        YEAR_T1_INFERENCE,
-        YEAR_T2_INFERENCE,
-        DRIVE_FOLDER_INFERENCE,
-    )
+from config import (
+    BANDS,
+    PATCH_SIZE,
+    EXPORT_SCALE,
+    ROI_TRAINING_BBOX,
+    YEAR_TRAINING,
+    DRIVE_FOLDER_TRAINING,
+    ROI_CHANGE_DETECTION_BBOX,
+    YEAR_T1_INFERENCE,
+    YEAR_T2_INFERENCE,
+    DRIVE_FOLDER_INFERENCE,
+)
 
 
 def initialize_ee(project="deforestationsentinel2"):

@@ -11,10 +11,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
 
-try:
-    from .config import BINARY_CLASS_NAMES
-except (ImportError, ValueError):
-    from config import BINARY_CLASS_NAMES
+from config import BINARY_CLASS_NAMES
 
 
 def evaluate_and_report_metrics(models_dict, validation_dataset, output_folder):

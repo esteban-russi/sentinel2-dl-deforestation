@@ -10,32 +10,18 @@ import os
 import numpy as np
 import tensorflow as tf
 
-try:
-    from .config import (
-        PATCH_SIZE,
-        BANDS,
-        LABEL_BAND,
-        NUM_CLASSES,
-        CLASS_NAMES_4,
-        BATCH_SIZE,
-        BUFFER_SIZE,
-        VALIDATION_SPLIT,
-        SPLIT_SEED,
-        FILE_PATTERN,
-    )
-except (ImportError, ValueError):
-    from config import (
-        PATCH_SIZE,
-        BANDS,
-        LABEL_BAND,
-        NUM_CLASSES,
-        CLASS_NAMES_4,
-        BATCH_SIZE,
-        BUFFER_SIZE,
-        VALIDATION_SPLIT,
-        SPLIT_SEED,
-        FILE_PATTERN,
-    )
+from config import (
+    PATCH_SIZE,
+    BANDS,
+    LABEL_BAND,
+    NUM_CLASSES,
+    CLASS_NAMES_4,
+    BATCH_SIZE,
+    BUFFER_SIZE,
+    VALIDATION_SPLIT,
+    SPLIT_SEED,
+    FILE_PATTERN,
+)
 
 
 def parse_tfrecord_4_class(example_proto):

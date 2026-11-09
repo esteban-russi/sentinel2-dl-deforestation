@@ -10,26 +10,15 @@ import time
 from datetime import datetime
 import numpy as np
 
-try:
-    from .config import (
-        MODEL_FILE_PATH,
-        INFERENCE_T1_FOLDER,
-        INFERENCE_T2_FOLDER,
-        OUTPUT_FOLDER,
-        FOREST_CLASS_INDEX,
-        PIXEL_RESOLUTION_M,
-    )
-    from .visualization import save_change_visualizations
-except (ImportError, ValueError):
-    from config import (
-        MODEL_FILE_PATH,
-        INFERENCE_T1_FOLDER,
-        INFERENCE_T2_FOLDER,
-        OUTPUT_FOLDER,
-        FOREST_CLASS_INDEX,
-        PIXEL_RESOLUTION_M,
-    )
-    from visualization import save_change_visualizations
+from config import (
+    MODEL_FILE_PATH,
+    INFERENCE_T1_FOLDER,
+    INFERENCE_T2_FOLDER,
+    OUTPUT_FOLDER,
+    FOREST_CLASS_INDEX,
+    PIXEL_RESOLUTION_M,
+)
+from visualization import save_change_visualizations
 
 
 def reclassify_to_forest_binary(predicted_labels, forest_class_index=FOREST_CLASS_INDEX):
@@ -108,10 +97,7 @@ def run_change_detection_analysis(
     Executes the full post-training change detection analysis workflow.
     """
     import tensorflow as tf
-    try:
-        from .data import build_inference_dataset
-    except (ImportError, ValueError):
-        from data import build_inference_dataset
+    from data import build_inference_dataset
 
     start_time = time.time()
     print("="*60 + "\n--- Starting Change Detection Analysis Workflow ---\n" + "="*60)

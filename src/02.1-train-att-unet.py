@@ -9,12 +9,8 @@ The model definition lives in `models.py`, while data loading,
 training, evaluation, and experiment logging live in `pipeline.py`.
 """
 
-try:
-    from .models import build_attention_unet_model, attention_gate
-    from .pipeline import run_experiment
-except (ImportError, ValueError):
-    from models import build_attention_unet_model, attention_gate
-    from pipeline import run_experiment
+from models import build_attention_unet_model, attention_gate
+from pipeline import run_experiment
 
 
 def main():

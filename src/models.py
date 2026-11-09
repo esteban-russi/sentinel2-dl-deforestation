@@ -10,10 +10,7 @@ Modular neural network components and architectures for land cover semantic segm
 
 from tensorflow.keras import layers, Model
 
-try:
-    from .config import PATCH_SIZE, NUM_BANDS, NUM_CLASSES
-except (ImportError, ValueError):
-    from config import PATCH_SIZE, NUM_BANDS, NUM_CLASSES
+from config import PATCH_SIZE, NUM_BANDS, NUM_CLASSES
 
 
 def conv_block(

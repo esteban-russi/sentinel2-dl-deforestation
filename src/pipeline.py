@@ -12,82 +12,43 @@ from datetime import datetime
 import pandas as pd
 import tensorflow as tf
 
-try:
-    from .config import (
-        DATA_FOLDER,
-        OUTPUT_FOLDER,
-        FILE_PATTERN,
-        LOG_FILE,
-        PATCH_SIZE,
-        BANDS,
-        LABEL_BAND,
-        TCI_BANDS,
-        NUM_BANDS,
-        TCI_INDICES,
-        NUM_CLASSES,
-        CLASS_NAMES_4,
-        BINARY_CLASS_NAMES,
-        BATCH_SIZE,
-        BUFFER_SIZE,
-        EPOCHS,
-        VALIDATION_SPLIT,
-        SPLIT_SEED,
-        VALIDATION_STEPS_PER_EPOCH,
-        RUN_NOTES,
-    )
-    from .data import (
-        parse_tfrecord_4_class,
-        calculate_class_weights,
-        build_dataset,
-    )
-    from .training import (
-        get_gpu_info,
-        get_cpu_info,
-        compile_and_train,
-    )
-    from .evaluation import evaluate_and_report_metrics
-    from .visualization import (
-        save_visualizations,
-        save_training_histories,
-    )
-except (ImportError, ValueError):
-    from config import (
-        DATA_FOLDER,
-        OUTPUT_FOLDER,
-        FILE_PATTERN,
-        LOG_FILE,
-        PATCH_SIZE,
-        BANDS,
-        LABEL_BAND,
-        TCI_BANDS,
-        NUM_BANDS,
-        TCI_INDICES,
-        NUM_CLASSES,
-        CLASS_NAMES_4,
-        BINARY_CLASS_NAMES,
-        BATCH_SIZE,
-        BUFFER_SIZE,
-        EPOCHS,
-        VALIDATION_SPLIT,
-        SPLIT_SEED,
-        VALIDATION_STEPS_PER_EPOCH,
-        RUN_NOTES,
-    )
-    from data import (
-        parse_tfrecord_4_class,
-        calculate_class_weights,
-        build_dataset,
-    )
-    from training import (
-        get_gpu_info,
-        get_cpu_info,
-        compile_and_train,
-    )
-    from evaluation import evaluate_and_report_metrics
-    from visualization import (
-        save_visualizations,
-        save_training_histories,
-    )
+from config import (
+    DATA_FOLDER,
+    OUTPUT_FOLDER,
+    FILE_PATTERN,
+    LOG_FILE,
+    PATCH_SIZE,
+    BANDS,
+    LABEL_BAND,
+    TCI_BANDS,
+    NUM_BANDS,
+    TCI_INDICES,
+    NUM_CLASSES,
+    CLASS_NAMES_4,
+    BINARY_CLASS_NAMES,
+    BATCH_SIZE,
+    BUFFER_SIZE,
+    EPOCHS,
+    VALIDATION_SPLIT,
+    SPLIT_SEED,
+    VALIDATION_STEPS_PER_EPOCH,
+    RUN_NOTES,
+)
+from data import (
+    parse_tfrecord_4_class,
+    calculate_class_weights,
+    build_dataset,
+)
+from training import (
+    get_gpu_info,
+    get_cpu_info,
+    compile_and_train,
+)
+from evaluation import evaluate_and_report_metrics
+from visualization import (
+    save_visualizations,
+    save_training_histories,
+)
 
 
 def log_experiment(log_file_path, run_data):

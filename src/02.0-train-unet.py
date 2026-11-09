@@ -9,14 +9,9 @@ The model definition lives in `models.py`, while data loading,
 training, evaluation, and experiment logging live in `pipeline.py`.
 """
 
-try:
-    from .config import BATCH_SIZE
-    from .models import build_unet_model
-    from .pipeline import run_experiment
-except (ImportError, ValueError):
-    from config import BATCH_SIZE
-    from models import build_unet_model
-    from pipeline import run_experiment
+from config import BATCH_SIZE
+from models import build_unet_model
+from pipeline import run_experiment
 
 
 def main():

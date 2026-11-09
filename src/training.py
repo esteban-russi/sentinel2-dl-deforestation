@@ -9,10 +9,7 @@ import subprocess
 import psutil
 import tensorflow as tf
 
-try:
-    from .config import NUM_CLASSES, VALIDATION_STEPS_PER_EPOCH
-except (ImportError, ValueError):
-    from config import NUM_CLASSES, VALIDATION_STEPS_PER_EPOCH
+from config import NUM_CLASSES, VALIDATION_STEPS_PER_EPOCH
 
 
 def get_gpu_info():

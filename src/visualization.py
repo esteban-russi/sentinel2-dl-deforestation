@@ -14,24 +14,14 @@ from matplotlib.patches import Patch
 # Configure Matplotlib for non-GUI backend
 plt.switch_backend('Agg')
 
-try:
-    from .config import (
-        NUM_CLASSES,
-        CLASS_NAMES_4,
-        VIS_PALETTE_4_CLASS,
-        TCI_INDICES,
-        CLASS_NAMES_CHANGE,
-        CHANGE_MAP_PALETTE,
-    )
-except (ImportError, ValueError):
-    from config import (
-        NUM_CLASSES,
-        CLASS_NAMES_4,
-        VIS_PALETTE_4_CLASS,
-        TCI_INDICES,
-        CLASS_NAMES_CHANGE,
-        CHANGE_MAP_PALETTE,
-    )
+from config import (
+    NUM_CLASSES,
+    CLASS_NAMES_4,
+    VIS_PALETTE_4_CLASS,
+    TCI_INDICES,
+    CLASS_NAMES_CHANGE,
+    CHANGE_MAP_PALETTE,
+)
 
 
 def get_4_class_colormap():
