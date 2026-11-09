@@ -20,5 +20,6 @@ def test_config_constants():
     assert config.VALIDATION_SPLIT == 0.1
     assert config.SPLIT_SEED == 42
     assert config.VALIDATION_STEPS_PER_EPOCH == 15
+    assert config.UNET_STEPS_PER_EPOCH == 410
     assert config.EXPORT_SCALE == 10
     assert config.PIXEL_RESOLUTION_M == 10

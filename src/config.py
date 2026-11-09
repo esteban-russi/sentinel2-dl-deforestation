@@ -65,6 +65,11 @@ EPOCHS = 50
 VALIDATION_SPLIT = 0.1
 SPLIT_SEED = 42  # Fixes which patches end up in the validation split
 VALIDATION_STEPS_PER_EPOCH = 15
+# The baseline U-Net runs a fixed number of training steps per epoch, sized for
+# 2051 training patches. The Attention U-Net lets Keras infer the epoch length.
+# If the training split has fewer patches than this, Keras runs out of data.
+UNET_TRAINING_PATCHES = 2051
+UNET_STEPS_PER_EPOCH = UNET_TRAINING_PATCHES // BATCH_SIZE
 
 RUN_NOTES = (
     f"full run; BUFFER_SIZE = {BUFFER_SIZE}; BATCH_SIZE = {BATCH_SIZE}; "

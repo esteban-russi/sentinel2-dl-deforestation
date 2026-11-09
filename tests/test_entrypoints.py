@@ -24,7 +24,7 @@ def test_unet_entrypoint_main():
     with patch.object(mod, 'run_experiment') as mock_run_exp:
         mod.main()
         assert mock_run_exp.called
-        assert 'steps_per_epoch' in mock_run_exp.call_args[1]
+        assert mock_run_exp.call_args[1]['steps_per_epoch'] == 410
 
 
 def test_att_unet_entrypoint_main():
