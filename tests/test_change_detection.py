@@ -79,3 +79,4 @@ def test_format_change_report():
     assert "Area Changed:   10.00 km²" in report
     assert "Pixels Changed: 250" in report
     assert "Area Changed:   2.50 km²" in report
+    assert "Net Forest Change (Reforestation - Deforestation): -7.50 km²" in report

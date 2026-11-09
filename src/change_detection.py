@@ -81,6 +81,8 @@ def format_change_report(metrics):
         f"\nReforestation (Non-Forest -> Forest):\n"
         f"  - Pixels Changed: {metrics['pixels_reforested']:,}\n"
         f"  - Area Changed:   {metrics['area_reforested_sq_km']:,.2f} km²\n"
+        f"----------------------------------------------------------\n"
+        f"Net Forest Change (Reforestation - Deforestation): {metrics['net_change_sq_km']:+,.2f} km²\n"
         f"==========================================================\n"
     )
 
