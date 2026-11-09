@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import config
 
 
@@ -23,3 +25,13 @@ def test_config_constants():
     assert config.UNET_STEPS_PER_EPOCH == 410
     assert config.EXPORT_SCALE == 10
     assert config.PIXEL_RESOLUTION_M == 10
+
+
+def test_paths_resolve_under_the_repository_root():
+    repo_root = Path(__file__).resolve().parent.parent
+    assert Path(config.REPO_ROOT) == repo_root
+    assert Path(config.FILE_PATTERN) == repo_root / 'tfrecords' / 'colombia_production_data-*.tfrecord.gz'
+    assert Path(config.LOG_FILE) == repo_root / 'run_outputs' / 'experiment_log.csv'
+    assert Path(config.MODEL_FILE_PATH) == repo_root / 'best_models' / 'best_model_Attention_U-Net.keras'
+    assert Path(config.INFERENCE_T1_FOLDER) == repo_root / 'inference_tfrecords_2021'
+    assert Path(config.INFERENCE_T2_FOLDER) == repo_root / 'inference_tfrecords_2023'

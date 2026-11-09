@@ -10,15 +10,19 @@ import os
 # =============================================================================
 # --- 1. File & Path Configuration ---
 # =============================================================================
-DATA_FOLDER = 'tfrecords/'
-OUTPUT_FOLDER = 'run_outputs'
+# All data and output folders live under the repository root, whatever the
+# working directory the scripts are started from.
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+DATA_FOLDER = os.path.join(REPO_ROOT, 'tfrecords')
+OUTPUT_FOLDER = os.path.join(REPO_ROOT, 'run_outputs')
 FILE_PATTERN = os.path.join(DATA_FOLDER, 'colombia_production_data-*.tfrecord.gz')
 LOG_FILE = os.path.join(OUTPUT_FOLDER, 'experiment_log.csv')
 
 # Change detection inference paths
-MODEL_FILE_PATH = 'best_models/best_model_Attention_U-Net.keras'
-INFERENCE_T1_FOLDER = 'inference_tfrecords_2021/'
-INFERENCE_T2_FOLDER = 'inference_tfrecords_2023/'
+MODEL_FILE_PATH = os.path.join(REPO_ROOT, 'best_models', 'best_model_Attention_U-Net.keras')
+INFERENCE_T1_FOLDER = os.path.join(REPO_ROOT, 'inference_tfrecords_2021')
+INFERENCE_T2_FOLDER = os.path.join(REPO_ROOT, 'inference_tfrecords_2023')
 
 # =============================================================================
 # --- 2. Dataset & Image Constants ---
