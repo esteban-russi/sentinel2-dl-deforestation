@@ -3,3 +3,10 @@ testpaths = ["tests"]
 # The scripts in src/ are run as `python src/<script>.py` and import each
 # other as top-level modules, so the tests import them the same way.
 pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 120
+extend-exclude = ["notebooks"]
+
+[tool.ruff.lint]
+select = ["E", "F"]
