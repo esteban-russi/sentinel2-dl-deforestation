@@ -11,9 +11,6 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap, BoundaryNorm
 from matplotlib.patches import Patch
 
-# Configure Matplotlib for non-GUI backend
-plt.switch_backend('Agg')
-
 from config import (
     NUM_CLASSES,
     CLASS_NAMES_4,
@@ -22,6 +19,9 @@ from config import (
     CLASS_NAMES_CHANGE,
     CHANGE_MAP_PALETTE,
 )
+
+# Configure Matplotlib for non-GUI backend
+plt.switch_backend('Agg')
 
 
 def get_4_class_colormap():

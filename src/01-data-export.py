@@ -9,22 +9,9 @@ deforestation analysis project. It can be configured to export either:
    the change detection analysis.
 """
 
-from config import (
-    BANDS as S2_BANDS,
-    PATCH_SIZE,
-    EXPORT_SCALE,
-    ROI_TRAINING_BBOX,
-    YEAR_TRAINING,
-    DRIVE_FOLDER_TRAINING,
-    ROI_CHANGE_DETECTION_BBOX,
-    YEAR_T1_INFERENCE,
-    YEAR_T2_INFERENCE,
-    DRIVE_FOLDER_INFERENCE,
-)
+from config import YEAR_T1_INFERENCE, YEAR_T2_INFERENCE
 from gee_export import (
     initialize_ee,
-    mask_s2_clouds,
-    create_s2_composite,
     run_training_data_export,
     run_inference_data_export,
 )
